@@ -529,6 +529,7 @@ body.no-store #app{padding-top:calc(env(safe-area-inset-top) + 30px)}
     <div class="navright">
       <div class="starchip">⭐ <b id="starCount">0</b></div>
       <button class="nbtn" id="btnSound">🔊 효과음</button>
+      <button class="nbtn" id="btnWake">☀️ 화면 유지</button>
       <button class="nbtn" id="btnFull">⛶ 전체화면</button>
       <button class="nbtn" id="btnSettings">⚙️ 설정</button>
     </div>
@@ -720,6 +721,7 @@ var DEFAULT = {
   v: 4,
   name: '지아',
   sound: true,
+  wakeLockOn: false,
   tab: 'home',
   schedule: {
     mon: [
@@ -909,6 +911,7 @@ function normalize(raw){
   }
   out.name = (typeof src.name === 'string' && src.name.trim()) ? src.name.trim().slice(0,10) : '지아';
   out.sound = (src.sound === false) ? false : true;
+  out.wakeLockOn = (src.wakeLockOn === true);
   out.tab = (src.tab === 'study' || src.tab === 'dex') ? src.tab : 'home';
   out.stars = Math.max(0, parseInt(src.stars,10) || 0);
   out.starsToday = Math.max(0, parseInt(src.starsToday,10) || 0);
@@ -1516,6 +1519,74 @@ function ding(kind){
   }catch(e){}
 }
 
+/* ================= 화면 꺼짐 방지 (Screen Wake Lock) ================= */
+var wakeLock = null;
+var wakePending = false;
+var WAKE_FAIL_MSG = '이 브라우저에서는 지원하지 않거나 저전력 모드 중이에요';
+
+function wakeSupported(){
+  try{
+    return !!(typeof navigator !== 'undefined' && navigator && navigator.wakeLock
+      && typeof navigator.wakeLock.request === 'function');
+  }catch(e){ return false; }
+}
+function wakeSync(){
+  var b = $('#btnWake');
+  if(b){
+    b.textContent = state.wakeLockOn ? '☀️ 화면 유지 중' : '☀️ 화면 유지';
+    if(state.wakeLockOn) b.classList.add('on'); else b.classList.remove('on');
+  }
+  /* 꺼진 상태로 바뀌었는데 잠금이 남아 있으면 같이 풀어 준다 */
+  if(!state.wakeLockOn && wakeLock) wakeDrop();
+}
+function wakeDrop(){
+  var lock = wakeLock;
+  wakeLock = null;
+  try{ if(lock && typeof lock.release === 'function') lock.release(); }catch(e){}
+}
+function wakeFail(silent){
+  wakeLock = null;
+  wakePending = false;
+  if(state.wakeLockOn){
+    state.wakeLockOn = false;
+    save();
+    wakeSync();
+  }
+  if(!silent) toast(WAKE_FAIL_MSG);
+}
+function wakeRequest(silent, okMsg){
+  if(!wakeSupported()){ wakeFail(silent); return false; }
+  if(wakeLock || wakePending) return true;
+  var p;
+  try{
+    p = navigator.wakeLock.request('screen');
+  }catch(e){ wakeFail(silent); return false; }
+  wakePending = true;
+  if(p && typeof p.then === 'function'){
+    p.then(function(lock){
+      wakePending = false;
+      if(!state.wakeLockOn){
+        /* 기다리는 사이에 사용자가 껐으면 바로 해제 */
+        try{ if(lock && typeof lock.release === 'function') lock.release(); }catch(e){}
+        return;
+      }
+      wakeLock = lock || true;
+      try{
+        if(lock && typeof lock.addEventListener === 'function'){
+          lock.addEventListener('release', function(){ if(wakeLock === lock) wakeLock = null; });
+        }
+      }catch(e){}
+      if(okMsg) toast(okMsg);
+    })['catch'](function(){ wakeFail(silent); });
+    return true;
+  }
+  /* then이 없는 구현도 성공으로 본다 */
+  wakePending = false;
+  wakeLock = p || true;
+  if(okMsg) toast(okMsg);
+  return true;
+}
+
 /* ================= 별 표시 / 내비 ================= */
 function renderStars(){
   var el = $('#starCount');
@@ -1539,6 +1610,7 @@ function renderNav(){
     if(state.sound){ s.textContent = '🔊 효과음'; s.classList.add('on'); s.classList.remove('off'); }
     else { s.textContent = '🔇 효과음 꺼짐'; s.classList.remove('on'); s.classList.add('off'); }
   }
+  wakeSync();
   var bs = $('#brandSub');
   if(bs) bs.textContent = state.name + ' 하루 대시보드';
   var hn = $('#helloName');
@@ -2240,6 +2312,24 @@ bind('#btnSound', function(){
   if(state.sound){ ding('up'); toast('효과음을 켰어!'); }
   else toast('효과음을 껐어');
 });
+bind('#btnWake', function(){
+  if(state.wakeLockOn){
+    state.wakeLockOn = false;
+    save();
+    wakeSync();
+    toast('화면 유지를 껐어');
+    return;
+  }
+  if(!wakeSupported()){ toast(WAKE_FAIL_MSG); return; }
+  state.wakeLockOn = true;
+  save();
+  wakeSync();
+  wakeRequest(false, '화면이 저절로 꺼지지 않게 할게요');
+});
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden || document.visibilityState === 'hidden') return;
+  if(state.wakeLockOn) wakeRequest(true);
+});
 var inp = $('#todoInput');
 if(inp){
   inp.addEventListener('keydown', function(e){
@@ -2260,6 +2350,7 @@ document.addEventListener('keydown', function(e){
 rollover();
 setTab(state.tab);
 renderAll();
+if(state.wakeLockOn) wakeRequest(true);
 fetchWeather(false);
 
 if(!storageOK()){
