@@ -261,6 +261,10 @@ main{flex:1 1 auto;min-height:0;padding:12px 18px 14px;overflow:hidden}
   transition:background .2s,border-color .2s;
 }
 .todo.done{background:#F4EDFF;border-color:#D8C2FF}
+.todo.hw{background:linear-gradient(150deg,#FFFAFF,#F5ECFF);border-color:#D9C6FB;box-shadow:0 2px 8px rgba(124,77,255,.09)}
+.todo.hw .todo-text{color:#5A3BAE}
+.todo.hw.done{background:#F4EDFF;border-color:#D0B7FF;box-shadow:none}
+.todo.hw.done .todo-text{color:#B5A3CE}
 .pcheck{
   width:24px;height:24px;flex:0 0 auto;border-radius:50%;border:2px solid #E7DCFA;
   background:#fff;color:transparent;font-size:12px;line-height:1;
@@ -298,6 +302,12 @@ main{flex:1 1 auto;min-height:0;padding:12px 18px 14px;overflow:hidden}
 .ghostbtn.danger{color:#C05C86;border-color:#F6D8E6}
 .ghostbtn.armed{background:#FFE3F0;border-color:#F3B6D2;color:#C2307F}
 .mini{margin-left:auto;font-size:11.5px;font-weight:800;color:#8672A8}
+.hwlegend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:8px;flex:0 0 auto;font-size:10.5px;font-weight:800;color:#A08DBE;letter-spacing:-.3px;line-height:1.35}
+.hwlegend .hwl{white-space:nowrap;padding:2px 6px;border-radius:8px;background:#F7F2FF}
+.hwlegend .hwl b{color:#7C5CC4;font-weight:900}
+.hwlegend .hwl.lbl{background:none;padding:2px 0 2px 2px;color:#B3A3CC}
+.hwlegend .hwl.on{background:linear-gradient(150deg,#EDE0FF,#F8F1FF);color:#6236FF;box-shadow:inset 0 0 0 1.5px #D6C2FF}
+.hwlegend .hwl.on b{color:#6236FF}
 
 .memocard{padding:12px 15px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(160deg,#FFFFFF,#FFF6FB)}
 .notehead{display:flex;align-items:center;gap:8px}
@@ -587,6 +597,13 @@ body.no-store #app{padding-top:calc(env(safe-area-inset-top) + 30px)}
             <button class="ghostbtn" id="btnResetToday">오늘 초기화</button>
             <span class="mini" id="starToday">오늘 +0 ⭐</span>
           </div>
+          <div class="hwlegend" id="hwLegend" aria-label="요일별 숙제 규칙">
+            <span class="hwl lbl">요일 숙제</span>
+            <span class="hwl" data-hwdays="mon,wed">월·수 <b>영어</b></span>
+            <span class="hwl" data-hwdays="tue">화 <b>논술</b></span>
+            <span class="hwl" data-hwdays="thu,fri">목·금 <b>수학</b></span>
+            <span class="hwl" data-hwdays="sat,sun">토·일 <b>영어·수학</b></span>
+          </div>
         </div>
 
         <div class="card memocard">
@@ -683,8 +700,24 @@ var LEGACY_ROUTINES = [
   {label:'가방 챙기기', hint:'7:45~8:00'}
 ];
 
+var HOMEWORK = {
+  mon: ['en'],
+  tue: ['essay'],
+  wed: ['en'],
+  thu: ['math'],
+  fri: ['math'],
+  sat: ['en','math'],
+  sun: ['en','math']
+};
+var HW_SUBJECT = {
+  en:    {text:'영어 숙제',  short:'영어'},
+  essay: {text:'논술 숙제',  short:'논술'},
+  math:  {text:'수학 숙제',  short:'수학'}
+};
+var HW_CLASSES = ['en','essay','math'];
+
 var DEFAULT = {
-  v: 3,
+  v: 4,
   name: '지아',
   sound: true,
   tab: 'home',
@@ -716,7 +749,6 @@ var DEFAULT = {
   },
   todos: [
     {id:'td1', text:'학원 가방 챙기기', done:false},
-    {id:'td2', text:'숙제 끝내기', done:false},
     {id:'td3', text:'책 20분 읽기', done:false},
     {id:'td4', text:'피아노 연습하기', done:false},
     {id:'td5', text:'스스로 정리하기', done:false}
@@ -731,6 +763,7 @@ var DEFAULT = {
   starsToday: 0,
   bonusDay: '',
   lastDay: '',
+  hw: {day:'', done:{}, hidden:[]},
   notes: {'2026-11-19':'미술 대신 피아노! 4시엔 치과 갔다 와요 🦷'},
   view: 'week'
 };
@@ -795,7 +828,40 @@ var state = loadState();
 function fresh(){
   var s = JSON.parse(JSON.stringify(DEFAULT));
   s.lastDay = dateKey(todayDate());
+  s.hw = {day: dateKey(todayDate()), done:{}, hidden:[]};
   return s;
+}
+
+/* ================= 요일별 숙제 ================= */
+function hwKeysFor(dayKey){
+  return (HOMEWORK[dayKey] || []).slice(0);
+}
+function hwEnsure(){
+  var t = dateKey(todayDate());
+  if(!state.hw || typeof state.hw !== 'object') state.hw = {day:t, done:{}, hidden:[]};
+  if(state.hw.day !== t){
+    /* 날이 바뀌면 그날 숙제로 새로 시작한다 */
+    state.hw.day = t;
+    state.hw.done = {};
+    state.hw.hidden = [];
+  }
+  if(!state.hw.done || typeof state.hw.done !== 'object') state.hw.done = {};
+  if(!Array.isArray(state.hw.hidden)) state.hw.hidden = [];
+  return state.hw;
+}
+function hwItems(){
+  var h = hwEnsure();
+  return hwKeysFor(dayKeyOf(todayDate()))
+    .filter(function(k){ return h.hidden.indexOf(k) < 0; })
+    .map(function(k){
+      return {id:'hw-'+k, text:HW_SUBJECT[k].text, done: !!h.done[k], hw:true};
+    });
+}
+/* 오늘 화면에 보이는 할 일 = 요일 숙제(위) + 직접 담은 할 일(아래) */
+function allItems(){
+  return hwItems().concat(state.todos.map(function(t){
+    return {id:t.id, text:t.text, done:!!t.done, hw:false};
+  }));
 }
 function cleanItem(it){
   return {
@@ -811,6 +877,7 @@ function cleanItem(it){
 function normalize(raw){
   var base = JSON.parse(JSON.stringify(DEFAULT));
   var src = (raw && typeof raw === 'object') ? raw : {};
+  var srcVer = parseInt(src.v, 10) || 0;
   var out = base;
   if(src.schedule && typeof src.schedule === 'object'){
     DAY_KEYS.forEach(function(k){
@@ -822,6 +889,10 @@ function normalize(raw){
     out.todos = src.todos.filter(function(t){ return t && typeof t.text === 'string'; }).map(function(t){
       return {id: t.id ? String(t.id) : uid(), text: String(t.text).slice(0,40), done: !!t.done};
     });
+    /* v3까지의 범용 '숙제 끝내기'는 요일별 숙제로 대신하기 때문에 뺀다 */
+    if(srcVer < 4){
+      out.todos = out.todos.filter(function(t){ return t.text.replace(/\s+/g,'') !== '숙제끝내기'; });
+    }
   }
   if(!out.todos.length) out.todos = JSON.parse(JSON.stringify(DEFAULT.todos));
   if(Array.isArray(src.routines) && src.routines.length){
@@ -843,6 +914,14 @@ function normalize(raw){
   out.starsToday = Math.max(0, parseInt(src.starsToday,10) || 0);
   out.bonusDay = typeof src.bonusDay === 'string' ? src.bonusDay : '';
   out.lastDay = typeof src.lastDay === 'string' ? src.lastDay : dateKey(todayDate());
+  var hwSrc = (src.hw && typeof src.hw === 'object') ? src.hw : {};
+  out.hw = {day: typeof hwSrc.day === 'string' ? hwSrc.day : '', done:{}, hidden:[]};
+  if(hwSrc.done && typeof hwSrc.done === 'object'){
+    HW_CLASSES.forEach(function(k){ if(hwSrc.done[k]) out.hw.done[k] = true; });
+  }
+  if(Array.isArray(hwSrc.hidden)){
+    out.hw.hidden = hwSrc.hidden.filter(function(k){ return HW_CLASSES.indexOf(k) >= 0; });
+  }
   out.notes = (src.notes && typeof src.notes === 'object') ? src.notes : {};
   out.view = (src.view === 'today') ? 'today' : 'week';
   return out;
@@ -881,6 +960,7 @@ function rollover(){
   state.routines.forEach(function(x){ x.done = false; });
   state.starsToday = 0;
   state.bonusDay = '';
+  state.hw = {day: t, done:{}, hidden:[]};
   state.lastDay = t;
   DAY_KEYS.forEach(function(k){
     state.schedule[k] = state.schedule[k].filter(function(it){
@@ -990,8 +1070,9 @@ function updateClock(){
   if(sub) sub.textContent = greeting(h, state.name);
   var td = $('#clockTodo');
   if(td){
-    var done = state.todos.filter(function(t){ return t.done; }).length;
-    td.textContent = '오늘 할 일 ' + done + '/' + state.todos.length;
+    var its = allItems();
+    var done = its.filter(function(t){ return t.done; }).length;
+    td.textContent = '오늘 할 일 ' + done + '/' + its.length;
   }
 }
 
@@ -1482,30 +1563,44 @@ function setTab(t){
 function renderTodos(){
   var el = $('#todoList');
   if(!el) return;
-  if(!state.todos.length){
+  var items = allItems();
+  if(!items.length){
     el.innerHTML = '<div class="memoempty" style="padding:6px 2px">할 일을 하나 적어 볼까?</div>';
   } else {
-    el.innerHTML = state.todos.map(function(t){
-      return '<div class="todo' + (t.done ? ' done' : '') + '" data-todo-id="' + esc(t.id) + '">'
+    el.innerHTML = items.map(function(t){
+      return '<div class="todo' + (t.done ? ' done' : '') + (t.hw ? ' hw' : '') + '" data-todo-id="' + esc(t.id) + '">'
         + '<button class="pcheck" data-check="' + esc(t.id) + '" aria-label="완료 표시">' + (t.done ? '✔' : '') + '</button>'
         + '<span class="todo-text">' + esc(t.text) + '</span>'
         + '<button class="todo-del" data-todo-del="' + esc(t.id) + '" aria-label="삭제">✕</button>'
         + '</div>';
     }).join('');
   }
-  var done = state.todos.filter(function(t){ return t.done; }).length;
+  var done = items.filter(function(t){ return t.done; }).length;
   var pr = $('#todoProgress');
-  if(pr) pr.textContent = done + ' / ' + state.todos.length;
+  if(pr) pr.textContent = done + ' / ' + items.length;
   var st = $('#studyDate');
   if(st) st.textContent = fmtDateShort(todayDate());
   var sd = $('#noteDate');
   if(sd) sd.textContent = fmtDateShort(todayDate());
+  renderHwLegend();
   renderStars();
   updateClock();
 }
+function renderHwLegend(){
+  var box = $('#hwLegend');
+  if(!box) return;
+  var k = dayKeyOf(todayDate());
+  var chips = box.querySelectorAll('.hwl');
+  for(var i=0;i<chips.length;i++){
+    var days = String(chips[i].getAttribute('data-hwdays') || '').split(',');
+    if(days.indexOf(k) >= 0) chips[i].classList.add('on');
+    else chips[i].classList.remove('on');
+  }
+}
 function allTodosDone(){
-  if(!state.todos.length) return false;
-  return state.todos.every(function(t){ return t.done; });
+  var its = allItems();
+  if(!its.length) return false;
+  return its.every(function(t){ return t.done; });
 }
 function checkBonus(){
   var t = dateKey(todayDate());
@@ -1519,11 +1614,23 @@ function checkBonus(){
   return false;
 }
 function toggleTodo(id, el){
-  var t = null;
-  for(var i=0;i<state.todos.length;i++){ if(state.todos[i].id===id) t = state.todos[i]; }
-  if(!t) return;
-  t.done = !t.done;
-  if(t.done){
+  var isHw = String(id).indexOf('hw-') === 0;
+  var isDone = false;
+  if(isHw){
+    var key = String(id).slice(3);
+    if(HW_CLASSES.indexOf(key) < 0) return;
+    var h = hwEnsure();
+    if(h.hidden.indexOf(key) >= 0) return;
+    h.done[key] = !h.done[key];
+    isDone = !!h.done[key];
+  } else {
+    var t = null;
+    for(var i=0;i<state.todos.length;i++){ if(state.todos[i].id===id) t = state.todos[i]; }
+    if(!t) return;
+    t.done = !t.done;
+    isDone = t.done;
+  }
+  if(isDone){
     ding('up');
     addStars(1, el);
   } else {
@@ -1546,7 +1653,15 @@ function toggleTodo(id, el){
   renderDex();
 }
 function delTodo(id){
-  state.todos = state.todos.filter(function(t){ return t.id !== id; });
+  if(String(id).indexOf('hw-') === 0){
+    var key = String(id).slice(3);
+    if(HW_CLASSES.indexOf(key) < 0) return;
+    var h = hwEnsure();
+    if(h.hidden.indexOf(key) < 0) h.hidden.push(key);
+    delete h.done[key];
+  } else {
+    state.todos = state.todos.filter(function(t){ return t.id !== id; });
+  }
   save();
   renderTodos();
   renderPet();
@@ -1575,7 +1690,7 @@ function addTodo(){
   if(!inp) return;
   var v = (inp.value || '').trim();
   if(!v){ try{ inp.focus(); }catch(e){} return; }
-  if(state.todos.length >= 12){ toast('할 일은 12개까지만 담을 수 있어요'); return; }
+  if(allItems().length >= 12){ toast('할 일은 12개까지만 담을 수 있어요'); return; }
   state.todos.push({id:uid(), text:v.slice(0,40), done:false});
   inp.value = '';
   save();
@@ -1586,6 +1701,9 @@ function addTodo(){
 function resetToday(){
   state.todos.forEach(function(t){ t.done = false; });
   state.routines.forEach(function(r){ r.done = false; });
+  var h = hwEnsure();
+  h.done = {};
+  h.hidden = [];
   state.starsToday = 0;
   state.bonusDay = '';
   save();
