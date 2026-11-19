@@ -718,7 +718,7 @@ var HW_SUBJECT = {
 var HW_CLASSES = ['en','essay','math'];
 
 var DEFAULT = {
-  v: 4,
+  v: 5,
   name: '지아',
   sound: true,
   wakeLockOn: false,
@@ -744,7 +744,10 @@ var DEFAULT = {
     fri: [
       {id:'f1', start:'16:35', end:'18:15', title:'수영', memo:''}
     ],
-    sat: [],
+    sat: [
+      {id:'st1', start:'09:00', end:'10:20', title:'생활체육', memo:''},
+      {id:'st2', start:'11:00', end:'12:00', title:'줄넘기',   memo:''}
+    ],
     sun: [
       {id:'s1', start:'11:00', end:'12:00', title:'농구수업', memo:''}
     ]
@@ -753,7 +756,8 @@ var DEFAULT = {
     {id:'td1', text:'학원 가방 챙기기', done:false},
     {id:'td3', text:'책 20분 읽기', done:false},
     {id:'td4', text:'피아노 연습하기', done:false},
-    {id:'td5', text:'스스로 정리하기', done:false}
+    {id:'td5', text:'스스로 정리하기', done:false},
+    {id:'td6', text:'이 닦기', done:false}
   ],
   routines: [
     {id:'r1', label:'아침 먹기',        hint:'7:45~8:15', done:false},
@@ -897,6 +901,20 @@ function normalize(raw){
     }
   }
   if(!out.todos.length) out.todos = JSON.parse(JSON.stringify(DEFAULT.todos));
+  if(srcVer < 5){
+    /* v5: 토요일 생활체육·줄넘기 시간표와 매일 '이 닦기'를 기록에 겹치지 않게 더한다 */
+    var normTxt = function(s){ return String(s === null || s === undefined ? '' : s).replace(/\s+/g, ''); };
+    DEFAULT.schedule.sat.forEach(function(d){
+      var dup = out.schedule.sat.some(function(it){ return normTxt(it.title) === normTxt(d.title); });
+      if(!dup) out.schedule.sat.push(cleanItem(d));
+    });
+    var hasBrush = out.todos.some(function(t){ return normTxt(t.text) === normTxt('이 닦기'); });
+    if(!hasBrush){
+      var brushId = 'td6';
+      var idTaken = out.todos.some(function(t){ return t.id === brushId; });
+      out.todos.push({id: idTaken ? uid() : brushId, text: '이 닦기', done: false});
+    }
+  }
   if(Array.isArray(src.routines) && src.routines.length){
     out.routines = DEFAULT.routines.map(function(d, i){
       var r = src.routines[i] || {};
@@ -932,9 +950,21 @@ function normalize(raw){
 function loadState(){
   try{
     var raw = localStorage.getItem(STORE);
-    if(raw) return normalize(JSON.parse(raw));
+    if(raw){
+      var parsed = JSON.parse(raw);
+      var st = normalize(parsed);
+      /* 버전이 올라가며 새 기본값이 더해졌으면 바로 저장해 둔다 */
+      if((parseInt(parsed && parsed.v, 10) || 0) !== st.v){
+        try{ localStorage.setItem(STORE, JSON.stringify(st)); }catch(e2){}
+      }
+      return st;
+    }
     var old = localStorage.getItem(OLD_STORE);
-    if(old) return normalize(JSON.parse(old));
+    if(old){
+      var st2 = normalize(JSON.parse(old));
+      try{ localStorage.setItem(STORE, JSON.stringify(st2)); }catch(e3){}
+      return st2;
+    }
   }catch(e){}
   return fresh();
 }
