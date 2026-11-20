@@ -508,8 +508,19 @@ body.no-store #app{padding-top:calc(env(safe-area-inset-top) + 30px)}
 .rdep.ok{background:#E4FAF2;color:#1E8A63}
 .rdep.err{background:#FFE8E6;color:#C2432F}
 .rdep.send{background:#F1E8FF;color:#6236FF}
+.rcard.now{
+  border-color:#CDB2FF;
+  background:linear-gradient(165deg,#FFFFFF,#FAF5FF);
+  box-shadow:0 0 0 3px rgba(124,77,255,.14),var(--shadow);
+}
+.rcard.now .rnum{border-color:#A98BFF;color:#6236FF}
+.rcard.now .rhint{color:#6236FF}
+.rcard.now:after{
+  content:"지금";position:absolute;top:9px;left:38px;z-index:2;
+  font-size:9px;font-weight:800;letter-spacing:-.2px;color:#fff;
+  background:linear-gradient(140deg,#B79BFF,#7C4DFF);border-radius:7px;padding:2px 6px;
+}
 .rcard.hurry{
-  border-color:#FF9AA8;
   background:linear-gradient(165deg,#FFF6F7,#FFECEF);
   box-shadow:0 0 0 3px rgba(255,72,96,.34),0 12px 26px rgba(220,40,70,.22);
   animation:depPulse 1.15s ease-in-out infinite;
@@ -1499,7 +1510,7 @@ function renderRoutines(){
       + '<span class="rdone">✔</span>'
       + '<div class="rimg"><img src="' + img + '" alt="' + esc(r.label) + ' 쿠로미"></div>'
       + '<div class="rlabel">' + esc(r.label) + '</div>'
-      + '<div class="rhint">' + esc(r.hint) + '</div>'
+      + '<div class="rhint">' + esc(shiftHint(r.hint)) + '</div>'
       + (i === state.routines.length - 1 ? depStatusHTML() : '')
       + '<button class="rcheck' + (r.done ? ' on' : '') + '" data-rcheck="' + esc(r.id) + '">'
       + (r.done ? '✔ 완료!' : '다 했어요') + '</button>'
@@ -1508,6 +1519,7 @@ function renderRoutines(){
   var done = state.routines.filter(function(r){ return r.done; }).length;
   var pr = $('#routineProg');
   if(pr) pr.textContent = done + '/' + state.routines.length + ' 완료';
+  updateRoutineNow();
 }
 function toggleRoutine(id, el){
   var r = null;
@@ -2442,14 +2454,72 @@ function sendDepart(force){
     toast('알림을 보내지 못했어요 · 다시 눌러 주세요');
   });
 }
+/* 토요일은 아침 일정을 15분 늦춘다 (일요일·평일은 그대로) */
+function depShift(d){
+  d = d || new Date();
+  return (d.getDay() === 6) ? 15 : 0;
+}
+function depSchedule(d){
+  d = d || new Date();
+  var sh = depShift(d);
+  return {shift: sh, at: DEP_AT + sh, from: DEP_WARN_FROM + sh, to: DEP_WARN_TO + sh};
+}
+/* '7:45~8:15' 같은 루틴 시간 글자를 오늘 요일에 맞게 옮긴다 */
+function shiftHint(h){
+  var sh = depShift();
+  if(!sh) return String(h === null || h === undefined ? '' : h);
+  return String(h).replace(/(\d{1,2}):(\d{2})/g, function(m, hh, mm){
+    var total = (parseInt(hh,10)*60 + parseInt(mm,10) + sh) % 1440;
+    return Math.floor(total/60) + ':' + pad(total % 60);
+  });
+}
+/* 루틴 카드의 시간대를 분 단위로 읽는다 */
+function routineWindows(){
+  var out = [], prevEnd = null, list = state.routines || [];
+  for(var i=0;i<list.length;i++){
+    var h = shiftHint(list[i].hint);
+    var range = null;
+    var m = /(\d{1,2}):(\d{2})\s*[~-]\s*(\d{1,2}):(\d{2})/.exec(h);
+    if(m){
+      range = {start: parseInt(m[1],10)*60 + parseInt(m[2],10), end: parseInt(m[3],10)*60 + parseInt(m[4],10)};
+    } else {
+      var e = /~\s*(\d{1,2}):(\d{2})/.exec(h);
+      if(e){
+        var end = parseInt(e[1],10)*60 + parseInt(e[2],10);
+        range = {start: Math.max(0, end - 10), end: end};
+      }
+    }
+    out.push(range);
+    if(range) prevEnd = range.end;
+  }
+  return out;
+}
+/* 지금 해야 하는 단계 (겹치면 뒤 단계를 고른다) */
+function currentRoutineIndex(now){
+  var w = routineWindows(), m = minsOf(now);
+  for(var i=w.length-1;i>=0;i--){
+    if(w[i] && m >= w[i].start && m < w[i].end) return i;
+  }
+  return -1;
+}
+function updateRoutineNow(){
+  var list = document.querySelectorAll('#routineList .rcard');
+  if(!list || !list.length) return;
+  var idx = currentRoutineIndex();
+  for(var i=0;i<list.length;i++){
+    if(i === idx && !list[i].classList.contains('done')) list[i].classList.add('now');
+    else list[i].classList.remove('now');
+  }
+}
 function warnActive(now){
   now = now || new Date();
   var day = now.getDay();
-  var weekday = (day >= 1 && day <= 5);
+  var schoolDay = (day >= 1 && day <= 6);   /* 월~토 (일요일은 쉼) */
+  var sc = depSchedule(now);
   var m = minsOf(now);
-  var inWindow = (m >= DEP_WARN_FROM && m < DEP_WARN_TO);
-  var on = !departedToday() && inWindow && (weekday || DEP_PREVIEW);
-  return {on: on, m: m, weekday: weekday, inWindow: inWindow};
+  var inWindow = (m >= sc.from && m < sc.to);
+  var on = !departedToday() && inWindow && (schoolDay || DEP_PREVIEW);
+  return {on: on, m: m, weekday: schoolDay, inWindow: inWindow, at: sc.at, shift: sc.shift};
 }
 function renderWarnTint(){
   var el = $('#warnTint');
@@ -2463,16 +2533,19 @@ function renderWarnTint(){
   }
   if(!show) return;
   var now = new Date();
-  var leftSec = Math.round((DEP_AT - minsOf(now)) * 60);
+  var target = st.at;
+  var leftSec = Math.round((target - minsOf(now)) * 60);
   var tEl = $('#warnTitle'), sEl = $('#warnSub'), cEl = $('#warnClock');
+  var th = Math.floor(target/60), tm = target % 60;
+  var label = th + '시 ' + (tm ? tm + '분' : '정각');
   if(leftSec > 0){
     if(tEl) tEl.textContent = '출발 2분 전!';
-    if(sEl) sEl.textContent = '8시 30분까지 나가야 해요 · 지금 나가요!';
+    if(sEl) sEl.textContent = label + '까지 나가야 해요 · 지금 나가요!';
     if(cEl) cEl.textContent = pad(Math.floor(leftSec/60)) + ':' + pad(leftSec % 60);
   } else {
     var overSec = Math.max(0, -leftSec);
     if(tEl) tEl.textContent = '지금 출발!';
-    if(sEl) sEl.textContent = '8시 30분이 지났어요 · 서둘러요';
+    if(sEl) sEl.textContent = label + '이 지났어요 · 서둘러요';
     if(cEl) cEl.textContent = '+' + pad(Math.floor(overSec/60)) + ':' + pad(overSec % 60);
   }
 }
@@ -2620,6 +2693,7 @@ setInterval(function(){
   updateClock();
   renderBanner();
   renderWarnTint();
+  updateRoutineNow();
   tickCount++;
   var d = dateKey(todayDate());
   if(d !== lastDay){
