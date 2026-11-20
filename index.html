@@ -599,6 +599,8 @@ body.arrive-pop #warnMsg{display:none}
 #arrivePop{position:fixed;inset:0;z-index:38;display:none;align-items:center;justify-content:center;padding:22px}
 #arrivePop.on{display:flex}
 #arrivePop .dp-card{
+  /* 안내 한 줄이 '줘!'만 떨어지지 않도록 카드 폭을 넓게 잡는다 (글자는 줄이지 않음) */
+  width:min(94vw,600px);
   background:linear-gradient(175deg,#FFFFFF 0%,#FBF6FF 58%,#F0E6FF 100%);
   border-color:#DCC9FF;
   box-shadow:0 26px 70px rgba(96,58,160,.26),0 0 0 9px rgba(255,255,255,.42);
@@ -624,6 +626,7 @@ body.arrive-pop #warnMsg{display:none}
   #dpClock{font-size:29px}
   #dpGo{min-height:78px}
   #dpGo .dp-go-main{font-size:21px}
+  #arrivePop .dp-card{width:min(96vw,600px);padding:22px 16px 16px}
   #apTitle{font-size:24px}
   #apSub{font-size:14px}
   #apGo{min-height:78px}
@@ -823,7 +826,7 @@ body.arrive-pop #warnMsg{display:none}
   <div class="dp-back"></div>
   <div class="dp-card">
     <div id="apTitle">🏠 집에 잘 도착했어?</div>
-    <div id="apSub">오늘 도착 예정 14:30 · 집에 왔으면 아래 버튼을 눌러 엄마·아빠한테 알려 줘!</div>
+    <div id="apSub">오늘 도착 예정 <b>14:30</b> · 도착했으면 아래 버튼을 눌러 줘!</div>
     <button id="apGo" type="button" data-arrive-go="1" aria-label="집에 도착했어요! 엄마·아빠한테 알림"><span class="dp-go-main">🏠 집에 도착했어요!</span><span class="dp-go-note">(엄마·아빠한테 알림)</span></button>
     <button id="apClose" type="button" data-arrive-close="1">닫기</button>
   </div>
@@ -2886,7 +2889,7 @@ function renderArrivePopup(){
   try{ el.setAttribute('aria-hidden', 'false'); }catch(e){}
   var sub = $('#apSub');
   if(sub && sub.getAttribute('data-at') !== String(st.at)){
-    sub.innerHTML = '오늘 도착 예정 <b>' + hhmmOf(st.at) + '</b> · 집에 왔으면 아래 버튼을 눌러 엄마·아빠한테 알려 줘!';
+    sub.innerHTML = '오늘 도착 예정 <b>' + hhmmOf(st.at) + '</b> · 도착했으면 아래 버튼을 눌러 줘!';
     sub.setAttribute('data-at', String(st.at));
   }
 }
