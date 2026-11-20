@@ -616,7 +616,7 @@ body.arrive-pop #warnMsg{display:none}
 #apGo:active{transform:scale(.98)}
 #apGo .dp-go-main{font-size:24px;font-weight:900;letter-spacing:-.8px}
 #apGo .dp-go-note{font-size:12.5px;font-weight:800;opacity:.93}
-#apLater{margin-top:9px;border:0;background:transparent;color:#9A88B4;font-size:12.5px;font-weight:800;padding:8px 12px;cursor:pointer}
+#apClose{margin-top:9px;border:0;background:transparent;color:#9A88B4;font-size:12.5px;font-weight:800;padding:8px 12px;cursor:pointer}
 @media (max-width:900px){
   #departPop .dp-card{padding:22px 18px 14px;border-radius:26px}
   #dpTitle{font-size:24px}
@@ -825,7 +825,7 @@ body.arrive-pop #warnMsg{display:none}
     <div id="apTitle">🏠 집에 잘 도착했어?</div>
     <div id="apSub">오늘 도착 예정 14:30 · 집에 왔으면 아래 버튼을 눌러 엄마·아빠한테 알려 줘!</div>
     <button id="apGo" type="button" data-arrive-go="1" aria-label="집에 도착했어요! 엄마·아빠한테 알림"><span class="dp-go-main">🏠 집에 도착했어요!</span><span class="dp-go-note">(엄마·아빠한테 알림)</span></button>
-    <button id="apLater" type="button" data-arrive-later="1">아직 가는 중이야</button>
+    <button id="apClose" type="button" data-arrive-close="1">닫기</button>
   </div>
 </div>
 <div id="fx"></div>
@@ -866,7 +866,6 @@ var SWIM_WARN_TO = 16*60 + 40;   /* 수영 경고 끝 16:40 */
 /* 평일 집 도착 알림: 월 14:30 · 화 13:50 · 수 15:30 · 목 16:00 · 금 18:15 (도착을 누를 때까지 60분) */
 var ARRIVE_AT = {1: 14*60+30, 2: 13*60+50, 3: 15*60+30, 4: 16*60, 5: 18*60+15};
 var ARRIVE_WIN = 60;
-var ARRIVE_SNOOZE_MS = 5*60*1000;   /* '아직 가는 중이야' → 5분 뒤 다시 */
 /* ?warn=1 아침 경고 미리보기 · ?warn=swim 수영 경고 미리보기 (시간대와 상관없이) */
 var DEP_PREVIEW = '';
 try{
@@ -880,7 +879,6 @@ try{
 }catch(e){}
 var depSending = {morning: false, swim: false, arrive: false};
 var popSnoozeUntil = 0;   /* '조금 이따 누를래'로 팝업을 잠깐 접었을 때 */
-var arriveSnoozeUntil = 0; /* '아직 가는 중이야'로 도착 팝업을 5분 접었을 때 */
 var previewDone = false;  /* ?warn= 미리보기에서 버튼을 눌렀을 때 (실제 알림은 보내지 않음) */
 
 var ROUTINE_IMG = [
@@ -979,7 +977,8 @@ var DEFAULT = {
   view: 'week',
   depart: {day:'', time:'', tapped:false, sent:false, at:0},
   departSwim: {day:'', time:'', tapped:false, sent:false, at:0},
-  arrive: {day:'', time:'', tapped:false, sent:false, at:0}
+  arrive: {day:'', time:'', tapped:false, sent:false, at:0},
+  arriveClose: {day:''}
 };
 
 var EVO = [
@@ -1158,6 +1157,7 @@ function normalize(raw){
   out.depart = normDepart(src.depart, tkey);
   out.departSwim = normDepart(src.departSwim, tkey);
   out.arrive = normDepart(src.arrive, tkey);
+  out.arriveClose = normDay(src.arriveClose, tkey);
   return out;
 }
 function normDepart(dsrc, tkey){
@@ -1221,6 +1221,7 @@ function rollover(){
   state.depart = blankDepart();
   state.departSwim = blankDepart();
   state.arrive = blankDepart();
+  state.arriveClose = blankDay();
   state.hw = {day: t, done:{}, hidden:[]};
   state.lastDay = t;
   DAY_KEYS.forEach(function(k){
@@ -2531,6 +2532,13 @@ function lastRoutine(){
   return l[l.length - 1];
 }
 function blankDepart(){ return {day:'', time:'', tapped:false, sent:false, at:0}; }
+function blankDay(){ return {day:''}; }
+/* 날짜만 기억하는 기록 (오늘 것이 아니면 비운다) */
+function normDay(dsrc, tkey){
+  var s = (dsrc && typeof dsrc === 'object') ? dsrc : {};
+  var day = typeof s.day === 'string' ? s.day : '';
+  return {day: (day === tkey) ? day : ''};
+}
 function depRecOf(kind){ return (kind === 'swim') ? state.departSwim : state.depart; }
 function setDepRec(kind, rec){ if(kind === 'swim') state.departSwim = rec; else state.depart = rec; }
 function departRecord(kind){
@@ -2841,6 +2849,11 @@ function arriveRecord(){
   return a;
 }
 function arrivedToday(){ return !!arriveRecord(); }
+/* 오늘 '닫기'로 접어 둔 도착 팝업인지 */
+function arriveClosedToday(){
+  var c = state.arriveClose;
+  return !!(c && typeof c === 'object' && c.day === dateKey(todayDate()));
+}
 /* 지금 도착 팝업이 떠야 하는지 (출발 경고가 있는 순간엔 출발이 먼저) */
 function arriveState(now){
   now = now || new Date();
@@ -2848,7 +2861,7 @@ function arriveState(now){
   if(DEP_PREVIEW === 'arrive'){
     return {on: !previewDone && !arrivedToday(), at: sch ? sch.at : (14*60+30)};
   }
-  if(!sch || arrivedToday()) return {on: false, at: sch ? sch.at : 0};
+  if(!sch || arrivedToday() || arriveClosedToday()) return {on: false, at: sch ? sch.at : 0};
   var m = minsOf(now);
   if(m < sch.from || m >= sch.to) return {on: false, at: sch.at};
   return {on: true, at: sch.at};
@@ -2859,7 +2872,7 @@ function renderArrivePopup(){
   var st = arriveState();
   var depOn = false;
   try{ depOn = !!warnState().on; }catch(e){}
-  var show = !!st.on && !depOn && !arrivedToday() && new Date().getTime() >= arriveSnoozeUntil;
+  var show = !!st.on && !depOn && !arrivedToday() && !arriveClosedToday();
   if(!show){
     if(el.classList.contains('on')){
       el.classList.remove('on');
@@ -2934,6 +2947,19 @@ function sendArrive(force){
     toast('도착 알림을 보내지 못했어요 · 다시 눌러 주세요');
   });
 }
+/* '닫기' — 오늘 도착 팝업을 그냥 접는다 (엄마·아빠한테 알리지 않고, 오늘은 다시 띄우지 않는다) */
+function closeArrive(){
+  if(DEP_PREVIEW){
+    previewDone = true;
+    renderDepartWatch();
+    toast('미리보기 화면이에요 · 실제 알림은 보내지 않았어요');
+    return;
+  }
+  state.arriveClose = {day: dateKey(new Date())};
+  save();
+  renderDepartWatch();
+  toast('도착 알림은 보내지 않았어요 · 오늘은 이 팝업을 다시 띄우지 않아요');
+}
 /* 4단계를 이미 눌렀는데 기록이 없으면(예전 저장값) 출발한 것으로 보고 한 번만 알린다 */
 function ensureMorningDepart(){
   if(DEP_PREVIEW) return;
@@ -2993,8 +3019,8 @@ document.addEventListener('click', function(e){
   var agoEl = t.closest('[data-arrive-go]');
   if(agoEl){ sendArrive(false); return; }
 
-  var alatEl = t.closest('[data-arrive-later]');
-  if(alatEl){ arriveSnoozeUntil = new Date().getTime() + ARRIVE_SNOOZE_MS; renderDepartWatch(); return; }
+  var alatEl = t.closest('[data-arrive-close]');
+  if(alatEl){ closeArrive(); return; }
 
   var rc = t.closest('[data-rcheck]');
   if(rc){ toggleRoutine(rc.getAttribute('data-rcheck'), rc); return; }
