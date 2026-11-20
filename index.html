@@ -2520,7 +2520,8 @@ function warnActive(now){
   var sc = depSchedule(now);
   var m = minsOf(now);
   var inWindow = (m >= sc.from && m < sc.to);
-  var on = !departedToday() && inWindow && (schoolDay || DEP_PREVIEW);
+  /* ?warn=1 미리보기: 시간대와 상관없이 보여 준다 (출발을 누르면 꺼짐) */
+  var on = DEP_PREVIEW ? !departedToday() : (!departedToday() && inWindow && schoolDay);
   return {on: on, m: m, weekday: schoolDay, inWindow: inWindow, at: sc.at, shift: sc.shift};
 }
 function renderWarnTint(){
@@ -2536,7 +2537,7 @@ function renderWarnTint(){
   if(!show) return;
   var now = new Date();
   var target = st.at;
-  var leftSec = Math.round((target - minsOf(now)) * 60);
+  var leftSec = (DEP_PREVIEW && !st.inWindow) ? 120 : Math.round((target - minsOf(now)) * 60);
   var tEl = $('#warnTitle'), sEl = $('#warnSub'), cEl = $('#warnClock');
   var th = Math.floor(target/60), tm = target % 60;
   var label = th + '시 ' + (tm ? tm + '분' : '정각');
