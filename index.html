@@ -366,6 +366,8 @@ main{flex:1 1 auto;min-height:0;padding:12px 18px 14px;overflow:hidden}
 .tag{display:inline-block;align-self:flex-start;font-size:9px;font-weight:800;padding:1px 5px;border-radius:7px;margin-top:2px;letter-spacing:-.2px}
 .tag.one{background:#FFE6F2;color:#C2307F}
 .tag.skip{background:#F0ECF6;color:#87789B}
+.tag.nov{background:#E3F5EE;color:#2C7A63}
+.ev.novlim{background:#F5FCF9;border-style:dashed}
 .addbtn{flex:0 0 auto;border:1.5px dashed #DFCFF8;background:transparent;border-radius:11px;padding:7px 0;font-size:15px;color:#B4A0DC;cursor:pointer;line-height:1}
 .addbtn:active{background:#F4ECFF}
 .today-list{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:2px 4px 4px;scrollbar-width:none}
@@ -807,6 +809,14 @@ var STORE = 'jia-dashboard-v2';
 var OLD_STORE = 'jia-dashboard-v1';
 var EX_DATE = '2026-11-19';
 
+/* 11월 한정 방과후: 저장하지 않고 그릴 때마다 날짜를 보고 더한다 → 12월 1일부터 저절로 사라진다 */
+var NOV_YEAR = 2026, NOV_MONTH = 10;   /* month는 0부터: 10 = 11월 */
+var NOV_CLASSES = {
+  mon: [{id:'nov-mon', start:'13:00', end:'14:20', title:'생명과학'}],
+  wed: [{id:'nov-wed', start:'12:50', end:'14:10', title:'바이올린'}],
+  fri: [{id:'nov-fri', start:'13:50', end:'15:10', title:'영재큐브'}]
+};
+
 /* 출발 알림 (ntfy.sh) — 아침 마지막 루틴 '가방 챙겨 나가기' 또는 가운데 출발 팝업 버튼을 눌렀을 때 */
 var NTFY_TOPIC = 'jia-go-8f3k9p2x';
 var NTFY_URL = 'https://ntfy.sh/' + NTFY_TOPIC;
@@ -1181,11 +1191,40 @@ function isSkipped(it, ds){
   if(it.date) return false;
   return (it.skip || []).indexOf(ds) !== -1;
 }
+/* 11월 한정 방과후: 그 주의 '그 날짜'가 2026년 11월일 때만 더한다 (12월 첫 주의 11/30은 그대로 보인다) */
+function isNovDay(d){
+  return !!d && d.getFullYear() === NOV_YEAR && d.getMonth() === NOV_MONTH;
+}
+function dateFromKey(ds){
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ds || ''));
+  if(!m) return null;
+  return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+}
+function sameTitle(a, b){
+  return String(a === null || a === undefined ? '' : a).replace(/\s+/g,'') ===
+         String(b === null || b === undefined ? '' : b).replace(/\s+/g,'');
+}
+function novItemsFor(dayKey, ds){
+  var d = dateFromKey(ds);
+  if(!isNovDay(d)) return [];
+  var out = [];
+  (NOV_CLASSES[dayKey] || []).forEach(function(c){
+    var dup = (state.schedule[dayKey] || []).some(function(it){
+      if(it.date) return it.date === ds && sameTitle(it.title, c.title);
+      if((it.skip || []).indexOf(ds) >= 0) return false;
+      return sameTitle(it.title, c.title);
+    });
+    if(dup) return;   /* 같은 수업을 직접 넣어 두었으면 두 번 보여 주지 않는다 */
+    out.push({id:c.id, start:c.start, end:c.end, title:c.title, memo:'', skip:[], date:'', nov:true});
+  });
+  return out;
+}
 function eventsFor(dayKey, ds){
   var arr = (state.schedule[dayKey] || []).filter(function(it){
     if(it.date) return it.date === ds;
     return true;
   });
+  arr = arr.concat(novItemsFor(dayKey, ds));
   arr.sort(function(a,b){
     var x = parseHM(a.start), y = parseHM(b.start);
     return (x===null?9999:x) - (y===null?9999:y);
@@ -2017,12 +2056,13 @@ function renderSeg(){
 }
 function chipHTML(it, k, ds, isToday){
   var skipped = isToday && isSkipped(it, ds);
-  var cls = 'ev' + (it.date ? ' oneoff' : '') + (skipped ? ' skipped' : '');
+  var cls = 'ev' + (it.date ? ' oneoff' : '') + (it.nov ? ' novlim' : '') + (skipped ? ' skipped' : '');
   var tag = '';
   if(it.date) tag = '<span class="tag one">오늘만</span>';
+  else if(it.nov) tag = '<span class="tag nov">11월 한정</span>';
   else if(skipped) tag = '<span class="tag skip">오늘 쉼</span>';
   var timeTxt = esc(it.start) + (it.end ? '~'+esc(it.end) : '');
-  return '<button class="' + cls + '" data-ev="' + esc(it.id) + '" data-day="' + k + '" data-date="' + ds + '">'
+  return '<button class="' + cls + '" data-ev="' + esc(it.id) + '"' + (it.nov ? ' data-nov="1"' : '') + ' data-day="' + k + '" data-date="' + ds + '">'
     + '<span class="ev-time">' + timeTxt + '</span>'
     + '<span class="ev-title">' + esc(it.title || '일정') + '</span>'
     + (it.memo ? '<span class="ev-memo">' + esc(it.memo) + '</span>' : '')
@@ -2085,12 +2125,13 @@ function renderToday(){
     else if(now >= end){ cls=' past'; pill='<span class="pill past">끝났어</span>'; }
     else if(start - now <= 60){ pill='<span class="pill soon">곧 시작</span>'; }
 
-    html += '<div class="trow' + cls + '" data-ev="' + esc(it.id) + '" data-day="' + k + '" data-date="' + ds + '">'
+    html += '<div class="trow' + cls + '" data-ev="' + esc(it.id) + '"' + (it.nov ? ' data-nov="1"' : '') + ' data-day="' + k + '" data-date="' + ds + '">'
       + '<div class="t-time">' + esc(it.start || '--:--')
       + (it.end ? '<span class="t-end">~' + esc(it.end) + '</span>' : '')
       + '</div>'
       + '<div class="t-main"><div class="t-title">' + esc(it.title || '일정')
       + (it.date ? '<span class="tag one">오늘만</span>' : '')
+      + (it.nov ? '<span class="tag nov">11월 한정</span>' : '')
       + '</div>'
       + (it.memo ? '<div class="t-memo">' + esc(it.memo) + '</div>' : '')
       + '</div>'
@@ -2777,7 +2818,10 @@ document.addEventListener('click', function(e){
   if(addEl){ openEventModal(addEl.getAttribute('data-add'), addEl.getAttribute('data-date'), null); return; }
 
   var evEl = t.closest('[data-ev]');
-  if(evEl){ openEventModal(evEl.getAttribute('data-day'), evEl.getAttribute('data-date'), evEl.getAttribute('data-ev')); return; }
+  if(evEl){
+    if(evEl.getAttribute('data-nov') === '1'){ toast('11월 한정 일정이에요 · 12월엔 저절로 사라져요'); return; }
+    openEventModal(evEl.getAttribute('data-day'), evEl.getAttribute('data-date'), evEl.getAttribute('data-ev')); return;
+  }
 
   var goEl = t.closest('[data-depart-go]');
   if(goEl){ sendDepart(goEl.getAttribute('data-depart-go'), false); return; }
