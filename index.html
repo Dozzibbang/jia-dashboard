@@ -2622,7 +2622,7 @@ function sendDepart(kind, force){
     req = fetch(NTFY_URL, {
       method: 'POST',
       body: body,
-      headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+      headers: {'Content-Type': 'text/plain;charset=UTF-8', 'Priority': 'high'},
       cache: 'no-store'
     });
   }catch(e){
@@ -2930,6 +2930,7 @@ function sendArrive(force){
     req = fetch(NTFY_URL, {
       method: 'POST',
       body: '🏠 지아 집에 도착했어요! (' + stamp + ')',
+      headers: {'Content-Type': 'text/plain;charset=UTF-8', 'Priority': 'high'},
       cache: 'no-store'
     });
   }catch(e){
