@@ -599,8 +599,7 @@ body.arrive-pop #warnMsg{display:none}
 #arrivePop{position:fixed;inset:0;z-index:38;display:none;align-items:center;justify-content:center;padding:22px}
 #arrivePop.on{display:flex}
 #arrivePop .dp-card{
-  /* 안내 한 줄이 '줘!'만 떨어지지 않도록 카드 폭을 넓게 잡는다 (글자는 줄이지 않음) */
-  width:min(94vw,600px);
+  /* 폭은 출발 팝업과 같은 기본값(min(92vw,520px))을 그대로 쓴다 */
   background:linear-gradient(175deg,#FFFFFF 0%,#FBF6FF 58%,#F0E6FF 100%);
   border-color:#DCC9FF;
   box-shadow:0 26px 70px rgba(96,58,160,.26),0 0 0 9px rgba(255,255,255,.42);
@@ -626,7 +625,7 @@ body.arrive-pop #warnMsg{display:none}
   #dpClock{font-size:29px}
   #dpGo{min-height:78px}
   #dpGo .dp-go-main{font-size:21px}
-  #arrivePop .dp-card{width:min(96vw,600px);padding:22px 16px 16px}
+  #arrivePop .dp-card{padding:22px 16px 16px}
   #apTitle{font-size:24px}
   #apSub{font-size:14px}
   #apGo{min-height:78px}
