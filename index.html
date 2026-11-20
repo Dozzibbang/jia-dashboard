@@ -228,6 +228,11 @@ main{flex:1 1 auto;min-height:0;padding:12px 18px 14px;overflow:hidden}
 .rimg img{width:100%;height:100%;object-fit:cover;display:block}
 .rlabel{font-size:14.5px;font-weight:800;letter-spacing:-.45px;text-align:center;margin-top:6px}
 .rhint{font-size:10.5px;font-weight:800;color:#9A8BB3;text-align:center;letter-spacing:-.2px}
+/* 4단계 카드 전용 안내 한 줄 — 4장 모두 같은 높이를 비워 두어 카드 안 이미지 높이가 어긋나지 않는다 */
+.rnote{
+  min-height:13px;line-height:13px;font-size:10px;font-weight:800;color:#8B72C4;
+  text-align:center;letter-spacing:-.25px;white-space:nowrap;
+}
 .rcheck{
   margin-top:6px;height:38px;border-radius:12px;border:1.5px solid #E3D6FF;background:#F9F5FF;
   color:#6E5C8B;font-size:12.5px;font-weight:800;cursor:pointer;letter-spacing:-.3px;
@@ -1674,6 +1679,7 @@ function renderRoutines(){
       + (i === state.routines.length - 1 ? depStatusHTML() : '') + '</div>'
       + '<div class="rlabel">' + esc(r.label) + '</div>'
       + '<div class="rhint">' + esc(shiftHint(r.hint)) + '</div>'
+      + '<div class="rnote">' + (i === state.routines.length - 1 ? '(엄마·아빠한테 알림)' : '') + '</div>'
       + '<button class="rcheck' + (r.done ? ' on' : '') + '" data-rcheck="' + esc(r.id) + '">'
       + (r.done ? '✔ 완료!' : '다 했어요') + '</button>'
       + '</div>';
