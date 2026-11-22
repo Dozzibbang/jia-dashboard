@@ -864,7 +864,7 @@ var NOV_CLASSES = {
 /* 출발 알림 (ntfy.sh) — 아침 마지막 루틴 '가방 챙겨 나가기' 또는 가운데 출발 팝업 버튼을 눌렀을 때 */
 var NTFY_TOPIC = 'jia-go-8f3k9p2x';
 var NTFY_URL = 'https://ntfy.sh/' + NTFY_TOPIC;
-var DEP_AT = 8*60 + 30;          /* 08:30 출발 시각 (토요일은 +15분) */
+var DEP_AT = 8*60 + 30;          /* 08:30 출발 시각 (월요일 -60분 → 07:30, 토요일 +15분 → 08:45) */
 var DEP_WARN_FROM = 8*60 + 29;   /* 출발 1분 전 경고 시작 08:29:00 (토 08:44) */
 var DEP_WARN_TO = 8*60 + 35;     /* 경고 끝 08:35 (토 08:50) — 그 전에 출발을 누르면 바로 꺼짐 */
 var SWIM_AT = 16*60 + 35;        /* 금요일 수영 출발 16:35 (시간표의 '수영' 시작 시각) */
@@ -2665,10 +2665,13 @@ function morningAutoStep(){
   renderDex();
   return true;
 }
-/* 토요일은 아침 일정을 15분 늦춘다 (일요일·평일은 그대로) */
+/* 요일별 아침 출발 시각 보정: 월요일은 -60분(07:30 출발), 토요일은 +15분(08:45 출발), 나머지는 그대로 */
 function depShift(d){
   d = d || new Date();
-  return (d.getDay() === 6) ? 15 : 0;
+  var day = d.getDay();
+  if(day === 1) return -60;   /* 월요일 -60분 (07:30 출발) */
+  if(day === 6) return 15;    /* 토요일 +15분 (08:45 출발) */
+  return 0;
 }
 function depSchedule(d){
   d = d || new Date();
@@ -2699,7 +2702,7 @@ function shiftHint(h){
   var sh = depShift();
   if(!sh) return String(h === null || h === undefined ? '' : h);
   return String(h).replace(/(\d{1,2}):(\d{2})/g, function(m, hh, mm){
-    var total = (parseInt(hh,10)*60 + parseInt(mm,10) + sh) % 1440;
+    var total = ((parseInt(hh,10)*60 + parseInt(mm,10) + sh) % 1440 + 1440) % 1440;  /* 음수 shift도 안전하게 */
     return Math.floor(total/60) + ':' + pad(total % 60);
   });
 }
