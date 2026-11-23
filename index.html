@@ -577,12 +577,15 @@ body.depart-pop #warnMsg{display:none}
   animation:popIn .32s cubic-bezier(.3,1.4,.5,1);
 }
 #departPop.swim .dp-card{border-color:#BFE6FF;background:linear-gradient(175deg,#FFFFFF 0%,#F4FBFF 58%,#E9F6FF 100%);box-shadow:0 26px 70px rgba(20,80,120,.3),0 0 0 9px rgba(255,255,255,.42)}
+#departPop.ien .dp-card{border-color:#BFE6FF;background:linear-gradient(175deg,#FFFFFF 0%,#F4FBFF 58%,#E9F6FF 100%);box-shadow:0 26px 70px rgba(20,80,120,.3),0 0 0 9px rgba(255,255,255,.42)}
 #dpTitle{font-size:29px;font-weight:900;letter-spacing:-1.1px;line-height:1.22;color:#40225C}
 #departPop.swim #dpTitle{color:#0F4F73}
+#departPop.ien #dpTitle{color:#0F4F73}
 #dpSub{margin-top:9px;font-size:15.5px;font-weight:800;color:#7A638F;line-height:1.42;letter-spacing:-.4px;word-break:keep-all}
 #dpClockWrap{margin:15px auto 2px;display:inline-flex;align-items:baseline;gap:7px;padding:8px 18px;border-radius:16px;background:rgba(255,255,255,.92);box-shadow:0 6px 16px rgba(120,60,140,.13)}
 #dpClock{font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:#E01E4E}
 #departPop.swim #dpClock{color:#1187C9}
+#departPop.ien #dpClock{color:#1187C9}
 #dpClockNote{font-size:12.5px;font-weight:800;color:#9686B0}
 #dpGo{
   margin-top:16px;width:100%;min-height:88px;border:0;border-radius:24px;cursor:pointer;
@@ -592,6 +595,7 @@ body.depart-pop #warnMsg{display:none}
   animation:dpGoBeat 1.5s ease-in-out infinite;
 }
 #departPop.swim #dpGo{background:linear-gradient(160deg,#4FC3F7,#1187C9);box-shadow:0 14px 30px rgba(20,120,180,.34),inset 0 -4px 0 rgba(0,0,0,.08)}
+#departPop.ien #dpGo{background:linear-gradient(160deg,#4FC3F7,#1187C9);box-shadow:0 14px 30px rgba(20,120,180,.34),inset 0 -4px 0 rgba(0,0,0,.08)}
 #dpGo:active{transform:scale(.98)}
 #dpGo .dp-go-main{font-size:24px;font-weight:900;letter-spacing:-.8px}
 #dpGo .dp-go-note{font-size:12.5px;font-weight:800;opacity:.93}
@@ -870,21 +874,25 @@ var DEP_WARN_TO = 8*60 + 35;     /* 경고 끝 08:35 (토 08:50) — 그 전에 
 var SWIM_AT = 16*60 + 35;        /* 금요일 수영 출발 16:35 (시간표의 '수영' 시작 시각) */
 var SWIM_WARN_FROM = 16*60 + 34; /* 수영 출발 1분 전 경고 16:34:00 */
 var SWIM_WARN_TO = 16*60 + 40;   /* 수영 경고 끝 16:40 */
+var IEN_AT = 17*60 + 20;         /* 화·목 아이엔(영어학원) 출발 17:20 (수업 시작 17:40보다 20분 먼저) */
+var IEN_WARN_FROM = 17*60 + 19;  /* 아이엔 출발 1분 전 경고 17:19:00 */
+var IEN_WARN_TO = 17*60 + 25;    /* 아이엔 경고 끝 17:25 */
 /* 평일 집 도착 알림: 월 14:30 · 화 13:50 · 수 15:30 · 목 16:00 · 금 18:15 (도착을 누를 때까지 60분) */
 var ARRIVE_AT = {1: 14*60+30, 2: 13*60+50, 3: 15*60+30, 4: 16*60, 5: 18*60+15};
 var ARRIVE_WIN = 60;
-/* ?warn=1 아침 경고 미리보기 · ?warn=swim 수영 경고 미리보기 (시간대와 상관없이) */
+/* ?warn=1 아침 경고 미리보기 · ?warn=swim 수영 · ?warn=ien 아이엔 경고 미리보기 (시간대와 상관없이) */
 var DEP_PREVIEW = '';
 try{
   var _wq = /[?&]warn=([^&#]*)/.exec(location.search || '');
   if(_wq){
     var _wv = decodeURIComponent(_wq[1] || '');
     if(_wv === 'swim' || _wv === 's' || _wv === '2') DEP_PREVIEW = 'swim';
+    else if(_wv === 'ien' || _wv === 'i' || _wv === '4') DEP_PREVIEW = 'ien';
     else if(_wv === 'arrive' || _wv === 'a' || _wv === '3') DEP_PREVIEW = 'arrive';
     else if(_wv && _wv !== '0') DEP_PREVIEW = 'morning';
   }
 }catch(e){}
-var depSending = {morning: false, swim: false, arrive: false};
+var depSending = {morning: false, swim: false, ien: false, arrive: false};
 var popSnoozeUntil = 0;   /* '조금 이따 누를래'로 팝업을 잠깐 접었을 때 */
 var previewDone = false;  /* ?warn= 미리보기에서 버튼을 눌렀을 때 (실제 알림은 보내지 않음) */
 
@@ -984,6 +992,7 @@ var DEFAULT = {
   view: 'week',
   depart: {day:'', time:'', tapped:false, sent:false, at:0},
   departSwim: {day:'', time:'', tapped:false, sent:false, at:0},
+  departIen: {day:'', time:'', tapped:false, sent:false, at:0},
   arrive: {day:'', time:'', tapped:false, sent:false, at:0},
   arriveClose: {day:''}
 };
@@ -1163,6 +1172,7 @@ function normalize(raw){
   var tkey = dateKey(todayDate());
   out.depart = normDepart(src.depart, tkey);
   out.departSwim = normDepart(src.departSwim, tkey);
+  out.departIen = normDepart(src.departIen, tkey);
   out.arrive = normDepart(src.arrive, tkey);
   out.arriveClose = normDay(src.arriveClose, tkey);
   return out;
@@ -1227,6 +1237,7 @@ function rollover(){
   state.bonusDay = '';
   state.depart = blankDepart();
   state.departSwim = blankDepart();
+  state.departIen = blankDepart();
   state.arrive = blankDepart();
   state.arriveClose = blankDay();
   state.hw = {day: t, done:{}, hidden:[]};
@@ -2547,10 +2558,11 @@ function normDay(dsrc, tkey){
   var day = typeof s.day === 'string' ? s.day : '';
   return {day: (day === tkey) ? day : ''};
 }
-function depRecOf(kind){ return (kind === 'swim') ? state.departSwim : state.depart; }
-function setDepRec(kind, rec){ if(kind === 'swim') state.departSwim = rec; else state.depart = rec; }
+/* kind: 'morning' | 'swim' | 'ien' → state의 기록 칸 */
+function depKeyOf(kind){ return (kind === 'swim') ? 'departSwim' : (kind === 'ien') ? 'departIen' : 'depart'; }
+function depRecOf(kind){ return state[depKeyOf(kind)]; }
+function setDepRec(kind, rec){ state[depKeyOf(kind)] = rec; }
 function departRecord(kind){
-  kind = (kind === 'swim') ? 'swim' : 'morning';
   var t = dateKey(todayDate());
   var d = depRecOf(kind);
   if(!d || typeof d !== 'object' || d.day !== t || !d.tapped) return null;
@@ -2558,6 +2570,7 @@ function departRecord(kind){
 }
 function departedToday(){ return !!departRecord('morning'); }
 function swimDepartedToday(){ return !!departRecord('swim'); }
+function ienDepartedToday(){ return !!departRecord('ien'); }
 function hhmmOf(mins){
   var m = Math.max(0, Math.round(mins));
   return pad(Math.floor(m/60)) + ':' + pad(m % 60);
@@ -2582,9 +2595,9 @@ function depCardEl(){
   if(!r) return null;
   try{ return document.querySelector('.rcard[data-rid="' + r.id + '"]'); }catch(e){ return null; }
 }
-/* 가운데 팝업 버튼이나 4단계를 누르면 엄마·아빠 폰으로 출발 알림을 보낸다 (아침·수영 따로 기록) */
+/* 가운데 팝업 버튼이나 4단계를 누르면 엄마·아빠 폰으로 출발 알림을 보낸다 (아침·수영·아이엔 따로 기록) */
 function sendDepart(kind, force){
-  kind = (kind === 'swim') ? 'swim' : 'morning';
+  kind = (kind === 'swim' || kind === 'ien') ? kind : 'morning';
   /* 미리보기 화면에서는 실제 알림을 보내지 않는다 (버튼이 눌리는 모습만 확인) */
   if(DEP_PREVIEW){
     previewDone = true;
@@ -2616,6 +2629,8 @@ function sendDepart(kind, force){
   renderRoutines();
   var body = (kind === 'swim')
     ? '🏊‍♀️ 지아 수영 출발했어요! (' + stamp + ')'
+    : (kind === 'ien')
+    ? '🏫 지아 아이엔(영어학원) 출발했어요! (' + stamp + ')'
     : '🎒 지아 집에서 출발했어요! (' + stamp + ')';
   var req;
   try{
@@ -2640,7 +2655,7 @@ function sendDepart(kind, force){
     save();
     ding('up');
     if(kind === 'morning') burstAt(depCardEl());
-    toast((kind === 'swim' ? '엄마·아빠한테 수영 출발 알림을 보냈어요!' : '엄마·아빠한테 출발 알림을 보냈어요!'));
+    toast((kind === 'swim') ? '엄마·아빠한테 수영 출발 알림을 보냈어요!' : (kind === 'ien') ? '엄마·아빠한테 아이엔 출발 알림을 보냈어요!' : '엄마·아빠한테 출발 알림을 보냈어요!');
     renderRoutines();
     renderDepartWatch();
   })['catch'](function(){
@@ -2697,6 +2712,10 @@ function swimSchedule(d){
   var diff = at - SWIM_AT;
   return {at: at, from: SWIM_WARN_FROM + diff, to: SWIM_WARN_TO + diff};
 }
+/* 화·목 아이엔(영어학원) 출발: 17:20 고정 (시간표의 수업 시작 17:40보다 20분 먼저 나간다) */
+function ienSchedule(d){
+  return {at: IEN_AT, from: IEN_WARN_FROM, to: IEN_WARN_TO};
+}
 /* '7:45~8:15' 같은 루틴 시간 글자를 오늘 요일에 맞게 옮긴다 */
 function shiftHint(h){
   var sh = depShift();
@@ -2744,20 +2763,23 @@ function updateRoutineNow(){
     else list[i].classList.remove('now');
   }
 }
-/* 지금 켜야 하는 경고: 'morning' | 'swim' | '' */
+/* 지금 켜야 하는 경고: 'morning' | 'swim' | 'ien' | '' */
 function warnState(now){
   now = now || new Date();
   var day = now.getDay();
   var m = minsOf(now);
   var schoolDay = (day >= 1 && day <= 6);   /* 월~토 (일요일은 쉼) */
-  var sc = depSchedule(now), sw = swimSchedule(now);
+  var sc = depSchedule(now), sw = swimSchedule(now), iw = ienSchedule(now);
   var morningWin = (m >= sc.from && m < sc.to);
   var swimWin = (m >= sw.from && m < sw.to);
+  var ienWin = (m >= iw.from && m < iw.to);
   var mode = '', inWindow = false, at = sc.at;
   if(DEP_PREVIEW === 'morning'){
     mode = (previewDone || departedToday()) ? '' : 'morning'; inWindow = morningWin; at = sc.at;
   } else if(DEP_PREVIEW === 'swim'){
     mode = (previewDone || swimDepartedToday()) ? '' : 'swim'; inWindow = swimWin; at = sw.at;
+  } else if(DEP_PREVIEW === 'ien'){
+    mode = (previewDone || ienDepartedToday()) ? '' : 'ien'; inWindow = ienWin; at = iw.at;
   } else if(DEP_PREVIEW === 'arrive'){
     /* 도착 미리보기에서는 빨간 출발 경고를 띄우지 않는다 */
     mode = ''; inWindow = false;
@@ -2765,6 +2787,8 @@ function warnState(now){
     mode = 'morning'; inWindow = true; at = sc.at;
   } else if(day === 5 && swimWin && !swimDepartedToday()){
     mode = 'swim'; inWindow = true; at = sw.at;
+  } else if((day === 2 || day === 4) && ienWin && !ienDepartedToday()){
+    mode = 'ien'; inWindow = true; at = iw.at;
   }
   return {mode: mode, on: !!mode, m: m, at: at, inWindow: inWindow, shift: sc.shift, schoolDay: schoolDay};
 }
@@ -2792,7 +2816,7 @@ function renderWarnTint(){
   var tEl = $('#warnTitle'), sEl = $('#warnSub'), cEl = $('#warnClock');
   var label = labelOf(st.at);
   if(leftSec > 0){
-    if(tEl) tEl.textContent = (st.mode === 'swim') ? '수영 출발 1분 전!' : '출발 1분 전!';
+    if(tEl) tEl.textContent = (st.mode === 'swim') ? '수영 출발 1분 전!' : (st.mode === 'ien') ? '아이엔 출발 1분 전!' : '출발 1분 전!';
     if(sEl) sEl.textContent = label + '까지 나가야 해요 · 지금 나가요!';
     if(cEl) cEl.textContent = pad(Math.floor(leftSec/60)) + ':' + pad(leftSec % 60);
   } else {
@@ -2814,15 +2838,16 @@ function renderDepartPopup(){
     try{ el.setAttribute('aria-hidden', 'true'); }catch(e){}
     return;
   }
-  var swim = (st.mode === 'swim');
+  var swim = (st.mode === 'swim'), ien = (st.mode === 'ien');
   if(swim) el.classList.add('swim'); else el.classList.remove('swim');
+  if(ien) el.classList.add('ien'); else el.classList.remove('ien');
   el.classList.add('on');
   document.body.classList.add('depart-pop');
   try{ el.setAttribute('aria-hidden', 'false'); }catch(e){}
   var leftSec = leftSeconds(st);
   var tEl = $('#dpTitle'), sEl = $('#dpSub'), cEl = $('#dpClock'), nEl = $('#dpClockNote'), gEl = $('#dpGo');
-  if(tEl) tEl.textContent = swim ? '🏊‍♀️ 수영 갈 시간이야!' : '🎒 지금 나갈 시간이야!';
-  if(sEl) sEl.textContent = swim
+  if(tEl) tEl.textContent = swim ? '🏊‍♀️ 수영 갈 시간이야!' : ien ? '🏫 아이엔 갈 시간이야!' : '🎒 지금 나갈 시간이야!';
+  if(sEl) sEl.textContent = (swim || ien)
     ? (labelOf(st.at) + ' 출발! 나갈 때 아래 버튼을 눌러 줘')
     : (labelOf(st.at) + ' 출발! 가방 챙기고 나갈 때 아래 버튼을 눌러 줘');
   if(leftSec > 0){
@@ -2834,10 +2859,10 @@ function renderDepartPopup(){
     if(nEl) nEl.textContent = '지났어 · 서둘러!';
   }
   if(gEl){
-    gEl.setAttribute('data-depart-go', swim ? 'swim' : 'morning');
-    gEl.setAttribute('aria-label', swim ? '수영 출발! 엄마·아빠한테 알림' : '집에서 출발! 엄마·아빠한테 알림');
+    gEl.setAttribute('data-depart-go', swim ? 'swim' : ien ? 'ien' : 'morning');
+    gEl.setAttribute('aria-label', swim ? '수영 출발! 엄마·아빠한테 알림' : ien ? '아이엔 출발! 엄마·아빠한테 알림' : '집에서 출발! 엄마·아빠한테 알림');
     var main = gEl.querySelector('.dp-go-main'), note = gEl.querySelector('.dp-go-note');
-    if(main) main.textContent = swim ? '🏊‍♀️ 수영 출발!' : '🎒 집에서 출발!';
+    if(main) main.textContent = swim ? '🏊‍♀️ 수영 출발!' : ien ? '🏫 아이엔 출발!' : '🎒 집에서 출발!';
     if(note) note.textContent = '(엄마·아빠한테 알림)';
   }
 }
@@ -2982,7 +3007,7 @@ function ensureMorningDepart(){
 }
 try{
   window.addEventListener('online', function(){
-    var kinds = ['morning', 'swim'];
+    var kinds = ['morning', 'swim', 'ien'];
     for(var i=0;i<kinds.length;i++){
       var rec = departRecord(kinds[i]);
       if(rec && !rec.sent && !depSending[kinds[i]]) sendDepart(kinds[i], true);
