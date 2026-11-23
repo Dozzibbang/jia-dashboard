@@ -887,6 +887,8 @@ var FIELDS_WARN_TO = 14*60 + 50;   /* 필즈 경고 끝 14:50 */
 /* 평일 집 도착 알림: 월 14:30 · 화 13:50 · 수 15:30 · 목 16:00 · 금 18:15 (도착을 누를 때까지 60분) */
 var ARRIVE_AT = {1: 14*60+30, 2: 13*60+50, 3: 15*60+30, 4: 16*60, 5: 18*60+15};
 var ARRIVE_WIN = 60;
+/* 월요일은 필즈 출발(14:44)과 겹치지 않게 14:30~14:44까지만 (14:44:00 종료) */
+var ARRIVE_END = {1: 14*60+44};
 /* ?warn=1 아침 경고 미리보기 · ?warn=swim 수영 · ?warn=ien 아이엔 · ?warn=fields 필즈 경고 미리보기 (시간대와 상관없이) */
 var DEP_PREVIEW = '';
 try{
@@ -2811,7 +2813,7 @@ function warnState(now){
   } else if((day === 2 || day === 4) && ienWin && !ienDepartedToday()){
     mode = 'ien'; inWindow = true; at = iw.at;
   } else if(day === 1 && fieldsWin && !fieldsDepartedToday()){
-    /* 월요일 14:44~14:50: 집 도착(14:30~15:30)과 겹치면 필즈 출발이 먼저 */
+    /* 월요일 14:44~14:50: 집 도착(14:30~14:44)이 끝난 뒤 필즈 출발 */
     mode = 'fields'; inWindow = true; at = fw.at;
   }
   return {mode: mode, on: !!mode, m: m, at: at, inWindow: inWindow, shift: sc.shift, schoolDay: schoolDay};
@@ -2896,12 +2898,14 @@ function renderDepartWatch(){
   renderDepartPopup();
   renderArrivePopup();
 }
-/* ===== 집 도착 확인 (평일만 · 도착을 누를 때까지 60분) ===== */
+/* ===== 집 도착 확인 (평일만 · 도착을 누를 때까지 60분, 월요일은 14:44까지) ===== */
 function arriveSchedule(d){
   d = d || new Date();
-  var at = ARRIVE_AT[d.getDay()];
+  var day = d.getDay();
+  var at = ARRIVE_AT[day];
   if(at === undefined) return null;          /* 토·일은 도착 팝업 없음 */
-  return {at: at, from: at, to: at + ARRIVE_WIN};
+  var to = (ARRIVE_END[day] !== undefined) ? ARRIVE_END[day] : at + ARRIVE_WIN;
+  return {at: at, from: at, to: to};
 }
 function arriveRecord(){
   var t = dateKey(todayDate());
