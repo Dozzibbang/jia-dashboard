@@ -853,6 +853,11 @@ var NOV_CLASSES = {
 /* 출발 알림 (ntfy.sh) — 아침 마지막 루틴 '가방 챙겨 나가기' 또는 가운데 출발 팝업 버튼을 눌렀을 때 */
 var NTFY_TOPIC = 'jia-go-8f3k9p2x';
 var NTFY_URL = 'https://ntfy.sh/' + NTFY_TOPIC;
+/* Bark (엄마 아이폰) — ntfy가 iOS에서 끊겨 APNs로 바로 오는 Bark에도 같이 보낸다 */
+var BARK_URL = 'https://api.day.app/push';
+var BARK_KEY = 'cGCkQZK5LbD76APTttuZ8F';
+var BARK_TITLE = '쿠로미 모닝';
+var BARK_GROUP = 'jia-dashboard';
 var DEP_AT = 8*60 + 30;          /* 08:30 출발 시각 (월요일 -60분 → 07:30, 토요일 +15분 → 08:45) */
 var DEP_WARN_FROM = 8*60 + 29;   /* 출발 1분 전 경고 시작 08:29:00 (토 08:44) */
 var DEP_WARN_TO = 8*60 + 35;     /* 경고 끝 08:35 (토 08:50) — 그 전에 출발을 누르면 바로 꺼짐 */
@@ -2566,6 +2571,46 @@ function depCardEl(){
   if(!r) return null;
   try{ return document.querySelector('.rcard[data-rid="' + r.id + '"]'); }catch(e){ return null; }
 }
+/* ntfy(남편 갤럭시) + Bark(엄마 아이폰)에 같은 문구를 동시에 보낸다.
+   두 fetch는 한꺼번에 나가고, 한쪽이라도 성공(res.ok)하면 보낸 것으로 본다 — 둘 다 실패했을 때만 실패.
+   done(ok)은 두 채널이 모두 응답한 뒤 딱 한 번 불린다. */
+function sendPushAll(body, done){
+  var left = 2, anyOk = false, finished = false;
+  function settle(ok){
+    if(finished) return;
+    if(ok) anyOk = true;
+    left--;
+    if(left > 0) return;
+    finished = true;
+    done(anyOk);
+  }
+  var senders = [
+    function(){
+      return fetch(NTFY_URL, {
+        method: 'POST',
+        body: body,
+        headers: {'Content-Type': 'text/plain;charset=UTF-8', 'Priority': 'high'},
+        cache: 'no-store'
+      });
+    },
+    function(){
+      return fetch(BARK_URL, {
+        method: 'POST',
+        body: JSON.stringify({device_key: BARK_KEY, title: BARK_TITLE, body: body, group: BARK_GROUP}),
+        headers: {'Content-Type': 'application/json;charset=utf-8'},
+        cache: 'no-store'
+      });
+    }
+  ];
+  for(var i=0;i<senders.length;i++){
+    try{
+      senders[i]().then(function(r){
+        if(!r || r.ok === false) throw new Error('http ' + (r && r.status));
+        settle(true);
+      })['catch'](function(){ settle(false); });
+    }catch(e){ settle(false); }
+  }
+}
 /* 가운데 팝업 버튼이나 4단계를 누르면 엄마·아빠 폰으로 출발 알림을 보낸다 (아침·수영·아이엔 따로 기록) */
 function sendDepart(kind, force){
   kind = (kind === 'swim' || kind === 'ien' || kind === 'fields') ? kind : 'morning';
@@ -2605,39 +2650,19 @@ function sendDepart(kind, force){
     : (kind === 'fields')
     ? '🏫 지아 필즈 출발했어요! (' + stamp + ')'
     : '🎒 지아 집에서 출발했어요! (' + stamp + ')';
-  var req;
-  try{
-    req = fetch(NTFY_URL, {
-      method: 'POST',
-      body: body,
-      headers: {'Content-Type': 'text/plain;charset=UTF-8', 'Priority': 'high'},
-      cache: 'no-store'
-    });
-  }catch(e){
+  sendPushAll(body, function(ok){
     depSending[kind] = false;
-    depRecOf(kind).sent = false;
+    setDepRec(kind, {day: today, time: stamp, tapped: true, sent: ok, at: new Date().getTime()});
     save();
-    renderRoutines();
-    toast('알림을 보내지 못했어요 · 다시 눌러 주세요');
-    return;
-  }
-  req.then(function(r){
-    if(!r || r.ok === false) throw new Error('http ' + (r && r.status));
-    depSending[kind] = false;
-    setDepRec(kind, {day: today, time: stamp, tapped: true, sent: true, at: new Date().getTime()});
-    save();
-    ding('up');
-    if(kind === 'morning') burstAt(depCardEl());
-    toast((kind === 'swim') ? '엄마·아빠한테 수영 출발 알림을 보냈어요!' : (kind === 'ien') ? '엄마·아빠한테 아이엔 출발 알림을 보냈어요!' : (kind === 'fields') ? '엄마·아빠한테 필즈 출발 알림을 보냈어요!' : '엄마·아빠한테 출발 알림을 보냈어요!');
+    if(ok){
+      ding('up');
+      if(kind === 'morning') burstAt(depCardEl());
+      toast((kind === 'swim') ? '엄마·아빠한테 수영 출발 알림을 보냈어요!' : (kind === 'ien') ? '엄마·아빠한테 아이엔 출발 알림을 보냈어요!' : (kind === 'fields') ? '엄마·아빠한테 필즈 출발 알림을 보냈어요!' : '엄마·아빠한테 출발 알림을 보냈어요!');
+    } else {
+      toast('알림을 보내지 못했어요 · 다시 눌러 주세요');
+    }
     renderRoutines();
     renderDepartWatch();
-  })['catch'](function(){
-    depSending[kind] = false;
-    setDepRec(kind, {day: today, time: stamp, tapped: true, sent: false, at: new Date().getTime()});
-    save();
-    renderRoutines();
-    renderDepartWatch();
-    toast('알림을 보내지 못했어요 · 다시 눌러 주세요');
   });
 }
 /* 아침 출발 팝업 버튼 → 마지막 루틴(가방 챙겨 나가기)도 자동으로 체크하고 별 +1 */
@@ -2880,6 +2905,11 @@ function renderArriveBtn(){
 }
 /* 고정 버튼을 누르면 엄마·아빠 폰으로 도착 알림 — 하루에 몇 번이든 보낼 수 있다 */
 function sendArriveNow(resend){
+  /* 미리보기 화면에서는 실제 알림을 보내지 않는다 (ntfy·Bark 둘 다) */
+  if(DEP_PREVIEW){
+    toast('미리보기 화면이에요 · 실제 알림은 보내지 않았어요');
+    return;
+  }
   if(depSending.arrive) return;
   var now = new Date();
   var today = dateKey(now);
@@ -2901,36 +2931,17 @@ function sendArriveNow(resend){
   }
   depSending.arrive = true;
   renderArriveBtn();
-  var req;
-  try{
-    req = fetch(NTFY_URL, {
-      method: 'POST',
-      body: '🏠 지아 집에 도착했어요! (' + stamp + ')',
-      headers: {'Content-Type': 'text/plain;charset=UTF-8', 'Priority': 'high'},
-      cache: 'no-store'
-    });
-  }catch(e){
+  sendPushAll('🏠 지아 집에 도착했어요! (' + stamp + ')', function(ok){
     depSending.arrive = false;
-    state.arrive.sent = false;
+    state.arrive = {day: today, time: stamp, tapped: true, sent: ok, at: new Date().getTime()};
     save();
+    if(ok){
+      ding('up');
+      toast('엄마·아빠한테 집에 왔다는 거 알렸어! 🏠');
+    } else {
+      toast('집 도착 알림을 보내지 못했어 · 다시 눌러 줘');
+    }
     renderArriveBtn();
-    toast('집 도착 알림을 보내지 못했어 · 다시 눌러 줘');
-    return;
-  }
-  req.then(function(r){
-    if(!r || r.ok === false) throw new Error('http ' + (r && r.status));
-    depSending.arrive = false;
-    state.arrive = {day: today, time: stamp, tapped: true, sent: true, at: new Date().getTime()};
-    save();
-    ding('up');
-    toast('엄마·아빠한테 집에 왔다는 거 알렸어! 🏠');
-    renderArriveBtn();
-  })['catch'](function(){
-    depSending.arrive = false;
-    state.arrive = {day: today, time: stamp, tapped: true, sent: false, at: new Date().getTime()};
-    save();
-    renderArriveBtn();
-    toast('집 도착 알림을 보내지 못했어 · 다시 눌러 줘');
   });
 }
 /* 4단계를 이미 눌렀는데 기록이 없으면(예전 저장값) 출발한 것으로 보고 한 번만 알린다 */
