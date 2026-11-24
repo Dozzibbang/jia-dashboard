@@ -862,9 +862,9 @@ var SWIM_WARN_TO = 16*60 + 40;   /* 수영 경고 끝 16:40 */
 var IEN_AT = 17*60 + 20;         /* 화·목 아이엔(영어학원) 출발 17:20 (수업 시작 17:40보다 20분 먼저) */
 var IEN_WARN_FROM = 17*60 + 19;  /* 아이엔 출발 1분 전 경고 17:19:00 */
 var IEN_WARN_TO = 17*60 + 25;    /* 아이엔 경고 끝 17:25 */
-var FIELDS_AT = 14*60 + 45;      /* 월요일 필즈 출발 14:45 */
-var FIELDS_WARN_FROM = 14*60 + 44; /* 필즈 출발 1분 전 경고 14:44:00 */
-var FIELDS_WARN_TO = 14*60 + 50;   /* 필즈 경고 끝 14:50 */
+var FIELDS_AT = 14*60 + 40;      /* 월요일 필즈 출발 14:40 */
+var FIELDS_WARN_FROM = 14*60 + 39; /* 필즈 출발 1분 전 경고 14:39:00 */
+var FIELDS_WARN_TO = 14*60 + 45;   /* 필즈 경고 끝 14:45 */
 /* 집 도착 알림: 시간대별 자동 팝업 없이 헤더의 고정 버튼으로 아무 때나 (하루 여러 번 · 15초 연타 방지) */
 var ARRIVE_GAP = 15000;
 /* ?warn=1 아침 경고 미리보기 · ?warn=swim 수영 · ?warn=ien 아이엔 · ?warn=fields 필즈 경고 미리보기 (시간대와 상관없이) */
@@ -2689,7 +2689,7 @@ function swimSchedule(d){
 function ienSchedule(d){
   return {at: IEN_AT, from: IEN_WARN_FROM, to: IEN_WARN_TO};
 }
-/* 월요일 필즈 출발: 14:45 고정 (14:44~14:50 파란 팝업 · 집 도착 팝업보다 먼저) */
+/* 월요일 필즈 출발: 14:40 고정 (14:39~14:45 파란 팝업) */
 function fieldsSchedule(d){
   return {at: FIELDS_AT, from: FIELDS_WARN_FROM, to: FIELDS_WARN_TO};
 }
@@ -2767,7 +2767,7 @@ function warnState(now){
   } else if((day === 2 || day === 4) && ienWin && !ienDepartedToday()){
     mode = 'ien'; inWindow = true; at = iw.at;
   } else if(day === 1 && fieldsWin && !fieldsDepartedToday()){
-    /* 월요일 14:44~14:50: 집 도착(14:30~14:44)이 끝난 뒤 필즈 출발 */
+    /* 월요일 14:39~14:45: 필즈 출발 파란 팝업 (집 도착은 헤더 고정 버튼으로 언제든) */
     mode = 'fields'; inWindow = true; at = fw.at;
   }
   return {mode: mode, on: !!mode, m: m, at: at, inWindow: inWindow, shift: sc.shift, schoolDay: schoolDay};
