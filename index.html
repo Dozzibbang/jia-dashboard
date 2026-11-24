@@ -3051,7 +3051,6 @@ bind('#btnSound', function(){
   if(state.sound){ ding('up'); toast('효과음을 켰어!'); }
   else toast('효과음을 껐어');
 });
-bind('#arriveBtn', function(){ sendArriveNow(false); });
 document.addEventListener('visibilitychange', function(){
   if(document.hidden || document.visibilityState === 'hidden') return;
   if(state.wakeLockOn) wakeRequest();
